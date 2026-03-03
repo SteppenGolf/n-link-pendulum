@@ -1,0 +1,13 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+results/*.png
+results/*.gif
+results/*.mp4
+.env
+*.egg-info/
+dist/
+build/
+.pytest_cache/
