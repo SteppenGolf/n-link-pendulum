@@ -56,32 +56,56 @@ class NLinkPendulum:
 
         return f
 
+    def xdot(self, x, u):
+        q = x[: self.nq]
+        dq = x[self.nq :]
+        M = self._mass_matrix(q)
+        f = self._coriolis_gravity(q, dq)
+        B = np.zeros(self.nq)
+        B[0] = 1.0
+        ddq = solve(M, f + B * u, assume_a="sym")
+        return np.concatenate([dq, ddq])
+
 
 if __name__ == "__main__":
     p = NLinkPendulum(n=2, lengths=[0.5, 0.4], masses=[0.3, 0.2], cart_mass=1.0)
 
-    # test 1: zero velocity — should be all zeros
+    # test __init__
+    print("--- init test ---")
+    print(f"n:  {p.n}")
+    print(f"nq: {p.nq}")
+    print(f"nx: {p.nx}")
+    print(f"nu: {p.nu}")
+
+    # test _mass_matrix
+    print("\n--- mass matrix test ---")
     q = np.zeros(p.nq)
+    M = p._mass_matrix(q)
+    print(M)
+    print("Symmetric?", np.allclose(M, M.T))
+    print("Positive definite?", np.all(np.linalg.eigvals(M) > 0))
+
+    # test _coriolis_gravity
+    print("\n--- coriolis gravity test ---")
     dq = np.zeros(p.nq)
     f = p._coriolis_gravity(q, dq)
     print("Zero velocity:", f)
-
-    # test 2: small angle, zero velocity — gravity only, no coriolis
     q[1] = 0.1
     f = p._coriolis_gravity(q, dq)
     print("Small angle, zero vel:", f)
-
-    # test 3: zero angle, nonzero velocity — coriolis only, no gravity
     q = np.zeros(p.nq)
     dq = np.zeros(p.nq)
+    q[1] = 0.3
+    q[2] = 0.1
     dq[2] = 1.0
     f = p._coriolis_gravity(q, dq)
-    print("Zero angle, nonzero vel:", f)
-    # test 3: nonzero angle AND nonzero velocity — coriolis active
-    q = np.zeros(p.nq)
-    dq = np.zeros(p.nq)
-    q[1] = 0.3  # θ₁ offset
-    q[2] = 0.1  # θ₂ offset
-    dq[2] = 1.0  # θ̇₁ angular velocity
-    f = p._coriolis_gravity(q, dq)
     print("Nonzero angle and vel:", f)
+
+    # test xdot
+    print("\n--- xdot test ---")
+    x0 = np.zeros(p.nx)
+    x0[1] = 0.1
+    xd = p.xdot(x0, u=0)
+    print("state derivative:", xd)
+    print("velocities:", xd[: p.nq])
+    print("accelerations:", xd[p.nq :])
