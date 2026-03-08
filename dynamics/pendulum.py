@@ -43,7 +43,7 @@ class NLinkPendulum:
         f = np.zeros(self.nq)
 
         for i in range(n):
-            f[off + i] -= np.sum(m[i:]) * g * L[i] * np.sin(theta[i])
+            f[off + i] += np.sum(m[i:]) * g * L[i] * np.sin(theta[i])
 
             for j in range(n):
                 if i != j:
@@ -73,6 +73,39 @@ class NLinkPendulum:
         k3 = self.xdot(x + dt / 2 * k2, u)
         k4 = self.xdot(x + dt * k3, u)
         return x + dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
+
+    def linearize(self, x_eq=None, u_eq=0.0, eps=1e-5):
+        if x_eq is None:
+            x_eq = np.zeros(self.nx)  # ← only this inside if
+
+        A = np.zeros((self.nx, self.nx))  # ← outside if
+        B = np.zeros((self.nx, 1))
+
+        for j in range(self.nx):
+            xp = x_eq.copy()
+            xm = x_eq.copy()
+            xp[j] += eps
+            xm[j] -= eps
+            A[:, j] = (self.xdot(xp, u_eq) - self.xdot(xm, u_eq)) / (2 * eps)
+
+        B[:, 0] = (self.xdot(x_eq, u_eq + eps) - self.xdot(x_eq, u_eq - eps)) / (
+            2 * eps
+        )
+
+        return A, B
+
+    def discretize(self, A, B, dt):
+        nx = A.shape[0]
+        nu = B.shape[1]
+        M = np.zeros((nx + nu, nx + nu))
+        M[:nx, :nx] = A * dt
+        M[:nx, nx:] = B * dt
+        eM = expm(M)
+
+        Ad = eM[:nx, :nx]
+        Bd = eM[:nx, nx:]
+
+        return Ad, Bd
 
 
 if __name__ == "__main__":
@@ -150,3 +183,32 @@ if __name__ == "__main__":
     print(f"Final energy:    {energies[-1]:.6f}")
     print(f"Max drift:       {np.max(np.abs(energies - energies[0])):.6f}")
     print(f"Energy conserved? {np.max(np.abs(energies - energies[0])) < 1e-2}")
+
+    print("\n--- linearize test ---")
+    A, B = p.linearize()
+    eigenvalues = np.linalg.eigvals(A)
+    print("A eigenvalues:", eigenvalues)
+    print("Any unstable?", np.any(np.real(eigenvalues) > 0))
+
+    print("\nA matrix:")
+    print(np.round(A, 3))
+    print("\nB matrix:")
+    print(np.round(B, 3))
+    # The pendulum-only subsystem (rows/cols 1,2,4,5 — dropping cart x and x_dot)
+    idx = [1, 2, 4, 5]
+    A_pend = A[np.ix_(idx, idx)]
+    eigvals_pend = np.linalg.eigvals(A_pend)
+    print("Pendulum subsystem eigenvalues:", eigvals_pend)
+    print("Any unstable?", np.any(np.real(eigvals_pend) > 1e-6))
+
+    # discretize test
+    A, B = p.linearize()
+    dt = 0.01
+    Ad, Bd = p.discretize(A, B, dt)
+    print("Ad shape:", Ad.shape)
+    print("Bd shape:", Bd.shape)
+    Ad_approx = np.eye(p.nx) + A * dt
+    print("Ad ≈ I + A·dt? max diff:", np.max(np.abs(Ad - Ad_approx)))
+    eigvals_Ad = np.linalg.eigvals(Ad)
+    print("Ad eigenvalues (abs):", np.round(np.abs(eigvals_Ad), 4))
+    print("Any unstable (|λ|>1)?", np.any(np.abs(eigvals_Ad) > 1))
