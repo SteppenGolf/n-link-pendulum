@@ -107,6 +107,23 @@ class NLinkPendulum:
 
         return Ad, Bd
 
+    def tip_positions(self, x):
+        q = x[: self.nq]
+        off = 1 if self.has_cart else 0
+        x_cart = q[0] if self.has_cart else 0.0
+        theta = q[off : off + self.n]
+
+        positions = []
+        for k in range(self.n):
+            # sum link vectors from 0 to k
+            tip_x = x_cart + sum(self.L[i] * np.sin(theta[i]) for i in range(k + 1))
+
+            tip_y = sum(self.L[i] * np.cos(theta[i]) for i in range(k + 1))
+
+            positions.append((tip_x, tip_y))
+
+        return positions
+
 
 if __name__ == "__main__":
     p = NLinkPendulum(n=2, lengths=[0.5, 0.4], masses=[0.3, 0.2], cart_mass=1.0)
@@ -212,3 +229,18 @@ if __name__ == "__main__":
     eigvals_Ad = np.linalg.eigvals(Ad)
     print("Ad eigenvalues (abs):", np.round(np.abs(eigvals_Ad), 4))
     print("Any unstable (|λ|>1)?", np.any(np.abs(eigvals_Ad) > 1))
+
+    # --- tip_positions test ---
+    print("\n--- tip_positions test ---")
+    x_test = np.zeros(p.nx)
+    tips = p.tip_positions(x_test)
+    print("Upright (all zeros):")
+    for i, (tx, ty) in enumerate(tips):
+        print(f"  link {i + 1} tip: ({tx:.3f}, {ty:.3f})")
+
+    x_test2 = np.zeros(p.nx)
+    x_test2[1] = np.pi / 2  # first link horizontal
+    tips2 = p.tip_positions(x_test2)
+    print("Link 1 at 90 degrees:")
+    for i, (tx, ty) in enumerate(tips2):
+        print(f"  link {i + 1} tip: ({tx:.3f}, {ty:.3f})")
